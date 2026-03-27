@@ -78,12 +78,19 @@ def main():
             media_stream_constraints={"video": True, "audio": False},
         )
 
-        label_box = st.empty()
+        col1, col2 = st.columns(2)
+        cur_box = col1.empty()
+        all_box = col2.empty()
+
         if ctx.video_processor:
-            label_box.markdown(
-                f"**Detected:** {label_html(ctx.video_processor.labels, '#FF9800')}",
-                unsafe_allow_html=True
-            )
+            import time
+            all_labels: set = set()
+            while ctx.state.playing:
+                cur = ctx.video_processor.labels
+                all_labels.update(cur)
+                cur_box.markdown(f"### 📌 Current Labels:<br>{label_html(cur, '#FF9800')}", unsafe_allow_html=True)
+                all_box.markdown(f"### ✅ All Labels So Far:<br>{label_html(all_labels, '#4CAF50')}", unsafe_allow_html=True)
+                time.sleep(0.1)
 
     # ── SINGLE PHOTO ──────────────────────────────────────────────
     elif mode == "🖼 Single Photo":
@@ -92,10 +99,12 @@ def main():
             img = Image.open(snap)
             annotated, labels = annotate(img)
             st.image(annotated, use_container_width=True)
-            st.markdown(
-                f"**Detected:** {label_html(labels, '#FF9800')}",
-                unsafe_allow_html=True
-            )
+            col1, col2 = st.columns(2)
+            col1.markdown(f"### 📌 Current Labels:<br>{label_html(labels, '#FF9800')}", unsafe_allow_html=True)
+            if "photo_all_labels" not in st.session_state:
+                st.session_state.photo_all_labels = set()
+            st.session_state.photo_all_labels.update(labels)
+            col2.markdown(f"### ✅ All Labels So Far:<br>{label_html(st.session_state.photo_all_labels, '#4CAF50')}", unsafe_allow_html=True)
 
     # ── VIDEO UPLOAD ──────────────────────────────────────────────
     else:
