@@ -1,0 +1,73 @@
+model:
+  path: "models/allyolov8best.pt"
+  confidence_threshold: 0.5
+  nms_threshold: 0.4
+  input_size: 640
+  device: "auto"  # "cpu", "cuda", or "auto"
+  classes:
+    - "scratch"
+    - "dent" 
+    - "crack"
+    - "rust"
+    - "broken_part"
+
+processing:
+  batch_size: 1
+  max_detections: 100
+  enable_tracking: false
+  frame_skip: 0  # Skip frames for faster processing
+  resize_factor: 1.0  # Resize input frames
+
+video:
+  input_formats: [".mp4", ".avi", ".mov", ".mkv"]
+  output_format: "mp4"
+  fps: 30
+  quality: "high"  # "low", "medium", "high"
+  max_duration: 300  # Maximum video duration in seconds
+
+ui:
+  title: "🚗 Car Damage Detection"
+  theme: "dark"  # "light" or "dark"
+  show_confidence: true
+  show_fps: true
+  show_processing_time: true
+  sidebar_width: 300
+  color_scheme:
+    scratch: "#FF5722"
+    dent: "#2196F3" 
+    crack: "#FF9800"
+    rust: "#795548"
+    broken_part: "#F44336"
+    background: "#0E1117"
+    text: "#FAFAFA"
+
+logging:
+  level: "INFO"  # "DEBUG", "INFO", "WARNING", "ERROR"
+  file_path: "logs/car_damage.log"
+  max_file_size: "10MB"
+  backup_count: 5
+  format: "%(asctime)s - %(name)s - %(levelname)s - %(message)s"
+
+performance:
+  enable_gpu: true
+  memory_limit: "4GB"
+  cpu_threads: 4
+  cache_size: 100  # Number of frames to cache
+  optimization_level: "medium"  # "low", "medium", "high"
+
+security:
+  max_upload_size: "100MB"
+  allowed_file_types: [".mp4", ".avi", ".mov", ".jpg", ".png"]
+  rate_limit: 100  # Requests per hour
+  enable_cors: false
+  secret_key: "your-secret-key-here"
+
+monitoring:
+  enable_metrics: true
+  metrics_port: 8000
+  health_check_port: 8080
+  log_performance: true
+  alert_thresholds:
+    memory_usage: 90  # Percentage
+    cpu_usage: 95     # Percentage
+    disk_usage: 95    # Percentage
