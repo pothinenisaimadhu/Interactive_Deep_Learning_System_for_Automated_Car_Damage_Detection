@@ -1,26 +1,23 @@
 import streamlit as st
-import cv2
 import tempfile
 import os
+import numpy as np
+from PIL import Image, ImageDraw, ImageFont
 from ultralytics import YOLO
 
 CONFIDENCE_THRESHOLD = 0.5
 
 @st.cache_resource
 def load_model():
-    return YOLO("yolov8n.pt")  # fallback to default if custom model not present
+    return YOLO("yolov8n.pt")
 
-def get_model():
-    model_path = "models/allyolov8best.pt"
-    if os.path.exists(model_path):
-        return YOLO(model_path)
-    return load_model()
+model = load_model()
 
-model = get_model()
-
-def process_frame(frame):
-    results = model(frame)[0]
+def process_frame(frame_array):
+    results = model(frame_array)[0]
     current_labels = set()
+    img = Image.fromarray(frame_array)
+    draw = ImageDraw.Draw(img)
 
     if hasattr(results, 'boxes'):
         for box in results.boxes:
@@ -30,10 +27,10 @@ def process_frame(frame):
                 cls = int(box.cls[0].item())
                 label = model.names[cls]
                 current_labels.add(label)
-                cv2.rectangle(frame, (x1, y1), (x2, y2), (0, 255, 0), 2)
-                cv2.putText(frame, label, (x1, y1 - 10), cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 255, 0), 2)
+                draw.rectangle([x1, y1, x2, y2], outline=(0, 255, 0), width=2)
+                draw.text((x1, y1 - 10), label, fill=(0, 255, 0))
 
-    return frame, current_labels
+    return np.array(img), current_labels
 
 def format_labels(label_set, color, newline=False):
     if label_set:
@@ -54,41 +51,56 @@ def main():
         st.info("Please upload a video file to begin detection.")
         return
 
-    # Save uploaded file to a temp path
     with tempfile.NamedTemporaryFile(delete=False, suffix=".mp4") as tmp:
         tmp.write(uploaded_file.read())
         tmp_path = tmp.name
 
-    cap = cv2.VideoCapture(tmp_path)
-    stframe = st.empty()
-    col1, col2 = st.columns(2)
-    all_detected_labels = set()
-    current_label_box = col1.empty()
-    all_label_box = col2.empty()
+    try:
+        # Use ultralytics built-in video reading (uses its own cv2 internally)
+        results_gen = model(tmp_path, stream=True, conf=CONFIDENCE_THRESHOLD)
 
-    while cap.isOpened():
-        ret, frame = cap.read()
-        if not ret:
-            break
+        stframe = st.empty()
+        col1, col2 = st.columns(2)
+        all_detected_labels = set()
+        current_label_box = col1.empty()
+        all_label_box = col2.empty()
 
-        processed_frame, current_labels = process_frame(frame)
-        all_detected_labels.update(current_labels)
+        for result in results_gen:
+            current_labels = set()
+            frame_array = result.orig_img  # BGR numpy array from ultralytics
 
-        frame_rgb = cv2.cvtColor(processed_frame, cv2.COLOR_BGR2RGB)
-        stframe.image(frame_rgb, channels="RGB")
+            # Convert BGR to RGB
+            frame_rgb = frame_array[:, :, ::-1].copy()
+            img = Image.fromarray(frame_rgb)
+            draw = ImageDraw.Draw(img)
 
-        current_label_box.markdown(
-            f"### 📌 Current Labels Detected:<br>{format_labels(current_labels, '#FF9800', newline=True)}",
-            unsafe_allow_html=True
-        )
-        all_label_box.markdown(
-            f"### ✅ All Labels Detected So Far:<br>{format_labels(all_detected_labels, '#4CAF50', newline=True)}",
-            unsafe_allow_html=True
-        )
+            if hasattr(result, 'boxes'):
+                for box in result.boxes:
+                    conf = box.conf[0].item()
+                    if conf >= CONFIDENCE_THRESHOLD:
+                        x1, y1, x2, y2 = map(int, box.xyxy[0])
+                        cls = int(box.cls[0].item())
+                        label = model.names[cls]
+                        current_labels.add(label)
+                        draw.rectangle([x1, y1, x2, y2], outline=(0, 255, 0), width=2)
+                        draw.text((x1, max(0, y1 - 10)), label, fill=(0, 255, 0))
 
-    cap.release()
-    os.unlink(tmp_path)
-    st.success("🎉 Video Processing Completed!")
+            all_detected_labels.update(current_labels)
+            stframe.image(img)
+
+            current_label_box.markdown(
+                f"### 📌 Current Labels:<br>{format_labels(current_labels, '#FF9800', newline=True)}",
+                unsafe_allow_html=True
+            )
+            all_label_box.markdown(
+                f"### ✅ All Labels So Far:<br>{format_labels(all_detected_labels, '#4CAF50', newline=True)}",
+                unsafe_allow_html=True
+            )
+
+        st.success("🎉 Video Processing Completed!")
+
+    finally:
+        os.unlink(tmp_path)
 
 if __name__ == "__main__":
     main()
