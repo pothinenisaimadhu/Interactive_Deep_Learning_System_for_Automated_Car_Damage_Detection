@@ -9,15 +9,23 @@ CONFIDENCE_THRESHOLD = 0.5
 
 @st.cache_resource
 def load_model():
-    model_path = "/tmp/allyolov8best.pt"
+    filename = st.secrets.get("HF_FILENAME", "allyolov8best.pt")
+    model_path = f"/tmp/{filename}"
     if not os.path.exists(model_path):
         from huggingface_hub import hf_hub_download
-        hf_hub_download(
-            repo_id=st.secrets["HF_REPO_ID"],
-            filename="allyolov8best.pt",
-            token=st.secrets["HF_TOKEN"],
-            local_dir="/tmp"
-        )
+        # Try model repo first, then dataset repo
+        for repo_type in ["model", "dataset"]:
+            try:
+                hf_hub_download(
+                    repo_id=st.secrets["HF_REPO_ID"],
+                    filename=filename,
+                    token=st.secrets["HF_TOKEN"],
+                    repo_type=repo_type,
+                    local_dir="/tmp"
+                )
+                break
+            except Exception:
+                continue
     return YOLO(model_path)
 
 model = load_model()
