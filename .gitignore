@@ -21,9 +21,7 @@ logs/
 Thumbs.db
 desktop.ini
 
-# Large files
-*.pt
-*.pth
+# Large files (videos only)
 *.mp4
 *.avi
 *.mov

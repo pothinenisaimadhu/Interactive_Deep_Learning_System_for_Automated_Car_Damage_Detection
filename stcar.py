@@ -9,7 +9,16 @@ CONFIDENCE_THRESHOLD = 0.5
 
 @st.cache_resource
 def load_model():
-    return YOLO("yolov8n.pt")
+    model_path = "/tmp/allyolov8best.pt"
+    if not os.path.exists(model_path):
+        from huggingface_hub import hf_hub_download
+        hf_hub_download(
+            repo_id=st.secrets["HF_REPO_ID"],
+            filename="allyolov8best.pt",
+            token=st.secrets["HF_TOKEN"],
+            local_dir="/tmp"
+        )
+    return YOLO(model_path)
 
 model = load_model()
 
