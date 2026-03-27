@@ -1,12 +1,15 @@
 import streamlit as st
 import tempfile
 import os
-import time
 import numpy as np
 from PIL import Image, ImageDraw
 from ultralytics import YOLO
+import av
+from streamlit_webrtc import webrtc_streamer, VideoProcessorBase, RTCConfiguration
 
 CONFIDENCE_THRESHOLD = 0.5
+
+RTC_CONFIG = RTCConfiguration({"iceServers": [{"urls": ["stun:stun.l.google.com:19302"]}]})
 
 @st.cache_resource
 def load_model():
@@ -48,35 +51,39 @@ def label_html(label_set, color):
         for l in sorted(label_set)
     )
 
+# ── WebRTC Video Processor ────────────────────────────────────────
+class DamageDetector(VideoProcessorBase):
+    def __init__(self):
+        self.labels = set()
+
+    def recv(self, frame: av.VideoFrame) -> av.VideoFrame:
+        img = frame.to_image()  # PIL Image
+        annotated, labels = annotate(img)
+        self.labels = labels
+        return av.VideoFrame.from_image(annotated)
+
 def main():
     st.title("🚗 Car Damage Detection")
 
     mode = st.radio("Input Mode", ["📷 Live Camera", "🖼 Single Photo", "🎥 Upload Video"], horizontal=True)
 
-    # ── LIVE CAMERA ───────────────────────────────────────────────
+    # ── LIVE CAMERA (WebRTC) ──────────────────────────────────────
     if mode == "📷 Live Camera":
-        st.info("Click **Start** to begin live detection. Each captured frame is analyzed automatically.")
+        st.info("Allow camera access when prompted. Detection runs on every frame in real-time.")
 
-        run = st.toggle("▶ Start Live Detection")
-        stframe   = st.empty()
+        ctx = webrtc_streamer(
+            key="car-damage-live",
+            video_processor_factory=DamageDetector,
+            rtc_configuration=RTC_CONFIG,
+            media_stream_constraints={"video": True, "audio": False},
+        )
+
         label_box = st.empty()
-        all_labels: set = set()
-
-        while run:
-            snap = st.camera_input("", key=f"cam_{time.time()}", label_visibility="collapsed")
-            if snap:
-                img = Image.open(snap)
-                annotated, labels = annotate(img)
-                all_labels.update(labels)
-                stframe.image(annotated, use_container_width=True)
-                label_box.markdown(
-                    f"**Detected:** {label_html(labels, '#FF9800')}<br>"
-                    f"**All so far:** {label_html(all_labels, '#4CAF50')}",
-                    unsafe_allow_html=True
-                )
-            # re-check toggle state
-            run = st.session_state.get(f"cam_toggle", run)
-            time.sleep(0.1)
+        if ctx.video_processor:
+            label_box.markdown(
+                f"**Detected:** {label_html(ctx.video_processor.labels, '#FF9800')}",
+                unsafe_allow_html=True
+            )
 
     # ── SINGLE PHOTO ──────────────────────────────────────────────
     elif mode == "🖼 Single Photo":
@@ -102,10 +109,10 @@ def main():
             tmp_path = tmp.name
 
         try:
-            stframe   = st.empty()
+            stframe    = st.empty()
             col1, col2 = st.columns(2)
-            cur_box   = col1.empty()
-            all_box   = col2.empty()
+            cur_box    = col1.empty()
+            all_box    = col2.empty()
             all_labels: set = set()
 
             for result in model(tmp_path, stream=True, conf=CONFIDENCE_THRESHOLD):
