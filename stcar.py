@@ -9,20 +9,17 @@ CONFIDENCE_THRESHOLD = 0.5
 
 @st.cache_resource
 def load_model():
-    filename = st.secrets.get("HF_FILENAME", "allyolov8best.pt")
     from huggingface_hub import hf_hub_download
-    for repo_type in ["model", "dataset"]:
-        try:
-            model_path = hf_hub_download(
-                repo_id=st.secrets["HF_REPO_ID"],
-                filename=filename,
-                token=st.secrets["HF_TOKEN"],
-                repo_type=repo_type,
-            )
-            return YOLO(model_path)
-        except Exception:
-            continue
-    raise RuntimeError("Could not download model from HuggingFace")
+    filename = st.secrets["HF_FILENAME"]
+    repo_id  = st.secrets["HF_REPO_ID"]
+    token    = st.secrets["HF_TOKEN"]
+    model_path = hf_hub_download(
+        repo_id=repo_id,
+        filename=filename,
+        token=token,
+        repo_type="model",
+    )
+    return YOLO(model_path)
 
 model = load_model()
 
